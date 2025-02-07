@@ -3,7 +3,7 @@ name: VPS Setup & Deployment
 on:
   push:
     branches: [main]
-    paths: ['docker-compose.nginx.yml']
+    paths: ['docker-compose.nginx.yml','.github/workflows/pipeline.yml']
 
 jobs:
   server-setup:
