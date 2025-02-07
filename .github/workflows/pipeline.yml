@@ -1,0 +1,72 @@
+name: Combined VPS Setup & NGINX Deployment
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docker-compose.nginx.yml'
+      - '.github/workflows/pipeline.yml'
+      - 'vps_setup.sh'
+      - '.env.conf'
+
+jobs:
+  vps-initial-setup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Transfer setup files
+        run: |
+          sshpass -p "${{ secrets.INITIAL_PASSWORD }}" scp -o StrictHostKeyChecking=no \
+            vps_setup.sh \
+            .env.conf \
+            root@${{ secrets.VPS_IP }}:~
+
+      - name: Execute setup script
+        run: |
+          sshpass -p "${{ secrets.INITIAL_PASSWORD }}" ssh -o StrictHostKeyChecking=no \
+            root@${{ secrets.VPS_IP }} \
+            "chmod +x vps_setup.sh && ./vps_setup.sh"
+
+  nginx-deployment:
+    runs-on: ubuntu-latest
+    needs: vps-initial-setup
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create app directory
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_IP }}
+          port: ${{ secrets.SSH_PORT }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            mkdir -p /home/apps/my_nginx
+            [ -f "/home/apps/my_nginx/.deployed" ] && exit 0
+
+      - name: Deploy compose file
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_IP }}
+          port: ${{ secrets.SSH_PORT }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "docker-compose.nginx.yml"
+          target: "/home/apps/my_nginx/"
+
+      - name: Launch NGINX stack
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_IP }}
+          port: ${{ secrets.SSH_PORT }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /home/apps/my_nginx
+            docker compose -f docker-compose.nginx.yml pull
+            docker compose -f docker-compose.nginx.yml up -d --force-recreate
+            touch .deployed
