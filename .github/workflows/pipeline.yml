@@ -9,10 +9,15 @@ jobs:
   server-setup:
     runs-on: ubuntu-latest
     steps:
-      - name: Transfer setup script
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Transfer setup files
         run: |
+          pwd
           sshpass -p "${{ secrets.ROOT_PASSWORD }}" scp -o StrictHostKeyChecking=no \
-            vps_setup.sh root@${{ secrets.VPS_IP }}:~
+            ${{ github.workspace }}/vps_setup.sh \
+            root@${{ secrets.VPS_IP }}:~/
 
       - name: Execute setup
         run: |
@@ -23,6 +28,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: server-setup
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
       - name: Copy compose file
         run: |
           sshpass -p "${{ secrets.ROOT_PASSWORD }}" scp -o StrictHostKeyChecking=no \
